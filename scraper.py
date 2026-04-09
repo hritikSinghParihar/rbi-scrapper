@@ -1,4 +1,4 @@
-import httpx
+from curl_cffi import requests
 from selectolax.parser import HTMLParser
 from urllib.parse import urljoin
 import os
@@ -7,51 +7,20 @@ import time
 import random
 from datetime import datetime
 import io
-
-import boto3
-import botocore
-from botocore.config import Config
-from dotenv import load_dotenv
+from pathlib import Path
 
 from logger import get_logger
 
 logger = get_logger(__name__)
 
-# Load environment variables from .env
-load_dotenv()
-
+# Base directory for downloads
+DOWNLOAD_DIR = Path("downloads")
 INDEX_URL = "https://www.rbi.org.in/Scripts/BS_CircularIndexDisplay.aspx"
-R2_BUCKET = os.environ.get("R2_BUCKET_NAME", "rbi-circulars")
-
-# Initialize Cloudflare R2 Client
-r2_client = boto3.client(
-    's3',
-    endpoint_url=os.environ.get("R2_ENDPOINT_URL"),
-    aws_access_key_id=os.environ.get("R2_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.environ.get("R2_SECRET_ACCESS_KEY"),
-    region_name='auto',
-    config=Config(signature_version='s3v4')
-)
 
 def setup_client():
-    return httpx.Client(
-        http2=True,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Cache-Control": "max-age=0",
-            "Referer": "https://www.rbi.org.in/",
-        }, 
+    return requests.Session(
+        impersonate="chrome120",
         timeout=30, 
-        follow_redirects=True
     )
 
 def sanitize_filename(name):
@@ -59,22 +28,18 @@ def sanitize_filename(name):
     clean_name = re.sub(r'[\\/*?:"<>|]', '_', name)
     return clean_name.strip()
 
-def file_exists_in_r2(key):
-    """Checks if a file exists in the R2 bucket without downloading it."""
-    try:
-        r2_client.head_object(Bucket=R2_BUCKET, Key=key)
-        return True
-    except botocore.exceptions.ClientError as e:
-        if e.response['Error']['Code'] == '404':
-            return False
-        raise
+def file_exists_locally(year, month, filename):
+    """Checks if a file exists in the local download directory."""
+    file_path = DOWNLOAD_DIR / str(year) / f"{month:02d}" / filename
+    return file_path.exists()
 
 def get_circular_links(client, year, month):
     # Establish a "human-like" session by hitting the homepage first
     try:
         if not client.cookies:
             logger.info("Accessing homepage to establish session cookies...")
-            client.get("https://www.rbi.org.in/")
+            resp = client.get("https://www.rbi.org.in/")
+            logger.info(f"Homepage status: {resp.status_code}")
             time.sleep(random.uniform(1.0, 3.0))
     except Exception as e:
         logger.warning(f"Failed to load homepage for cookies: {e}")
@@ -134,13 +99,10 @@ def download_pdfs(client, links, year, month):
         url = link_info["url"]
         meaningful_name = sanitize_filename(link_info["name"])
         
-        # FAST SKIP LOGIC for Cloudflare R2
-        cloud_base_path = f"{year}/{str(month).zfill(2)}/{meaningful_name}"
-        path_lower = f"{cloud_base_path}.pdf"
-        path_upper = f"{cloud_base_path}.PDF"
-        
-        if file_exists_in_r2(path_lower) or file_exists_in_r2(path_upper):
-            logger.info(f"[{i}/{total}] Already in R2 (SKIPPED FETCH): {meaningful_name}")
+        # FAST SKIP LOGIC for Local Storage
+        if file_exists_locally(year, month, f"{meaningful_name}.pdf") or \
+           file_exists_locally(year, month, f"{meaningful_name}.PDF"):
+            logger.info(f"[{i}/{total}] Already local (SKIPPED FETCH): {meaningful_name}")
             continue
             
         logger.info(f"[{i}/{total}] Connecting to detail page: {url}")
@@ -163,28 +125,38 @@ def download_pdfs(client, links, year, month):
             filename = f"{meaningful_name}{ext}"
             cloud_filepath = f"{year}/{str(month).zfill(2)}/{filename}"
             
-            # Check one last time just in case of an exotic extension
-            if file_exists_in_r2(cloud_filepath):
-                logger.info(f"[{i}/{total}] Already in R2: {filename}")
+            # Check one last time just in case
+            if file_exists_locally(year, month, filename):
+                logger.info(f"[{i}/{total}] Already local: {filename}")
                 continue
                 
-            logger.info(f"[{i}/{total}] Streaming to RAM & Uploading to R2: {filename}")
+            logger.info(f"[{i}/{total}] Saving to local disk: {filename}")
             
-            # Efficiently transfer from RBI Servers -> RAM -> Cloudflare R2
-            with client.stream("GET", pdf_url) as stream_response:
-                # Load the few-megabyte PDF chunk into memory buffer
-                pdf_bytes = io.BytesIO(stream_response.read())
+            # Efficiently transfer from RBI Servers -> RAM -> Local File
+            stream_response = client.get(pdf_url)
+            if stream_response.status_code == 200:
+                content = stream_response.content
+                if not content:
+                    logger.error(f"[{i}/{total}] Downloaded content is EMPTY for {filename}")
+                    continue
+                    
+                # Ensure directory exists
+                dest_dir = DOWNLOAD_DIR / str(year) / f"{month:02d}"
+                dest_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Upload the buffer to your bucket
-                r2_client.upload_fileobj(pdf_bytes, R2_BUCKET, cloud_filepath)
-                
-            logger.info(f"[{i}/{total}] Successfully stored in R2: {cloud_filepath}")
+                # Write content to local file
+                with open(dest_dir / filename, "wb") as f:
+                    f.write(content)
+                    
+                logger.info(f"[{i}/{total}] Successfully stored locally: {filename}")
+            else:
+                logger.error(f"[{i}/{total}] Failed to download PDF. Status: {stream_response.status_code}")
             
         except Exception as e:
             logger.error(f"[{i}/{total}] Error processing {url}: {e}")
 
 def run_scraper():
-    logger.info("Starting RBI Scraper in Cloudflare R2 Mode...")
+    logger.info("Starting RBI Scraper in Local Storage Mode...")
     current_year = datetime.now().year
     start_year = 2025  # Starting at 2025 as requested
     
