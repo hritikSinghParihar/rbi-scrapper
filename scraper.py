@@ -3,6 +3,8 @@ from selectolax.parser import HTMLParser
 from urllib.parse import urljoin
 import os
 import re
+import time
+import random
 from datetime import datetime
 import io
 
@@ -33,7 +35,21 @@ r2_client = boto3.client(
 
 def setup_client():
     return httpx.Client(
-        headers={"User-Agent": "Mozilla/5.0"}, 
+        http2=True,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+            "Referer": "https://www.rbi.org.in/",
+        }, 
         timeout=30, 
         follow_redirects=True
     )
@@ -54,6 +70,15 @@ def file_exists_in_r2(key):
         raise
 
 def get_circular_links(client, year, month):
+    # Establish a "human-like" session by hitting the homepage first
+    try:
+        if not client.cookies:
+            logger.info("Accessing homepage to establish session cookies...")
+            client.get("https://www.rbi.org.in/")
+            time.sleep(random.uniform(1.0, 3.0))
+    except Exception as e:
+        logger.warning(f"Failed to load homepage for cookies: {e}")
+
     logger.info(f"Loading main index page to capture tokens: {INDEX_URL}")
     r_get = client.get(INDEX_URL)
     
@@ -168,5 +193,7 @@ def run_scraper():
             for month in range(1, 13):
                 links = get_circular_links(client, year, month)
                 download_pdfs(client, links, year, month)
+                # Random delay between months to avoid bot detection
+                time.sleep(random.uniform(2.0, 5.0))
                 
     logger.info("RBI Cloud Scraper finished successfully.")
