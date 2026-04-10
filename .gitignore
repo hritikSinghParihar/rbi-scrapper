@@ -7,6 +7,8 @@ logs/
 
 # Secrets
 .env
+credentials.json
+token.json
 
 # Temporary or cloned dirs
 tmp_rag/
