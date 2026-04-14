@@ -1,0 +1,209 @@
+{
+    "info": {
+        "_postman_id": "rbi-scrapper-api",
+        "name": "RBI Circular Scrapper API",
+        "description": "API for RBI Circular Scraping and Data Access",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "urlencoded",
+                            "urlencoded": [
+                                {
+                                    "key": "username",
+                                    "value": "admin@example.com",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "password",
+                                    "value": "yourpassword",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "API Key Management",
+            "item": [
+                {
+                    "name": "Rotate API Key (Update)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api-keys/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api-keys",
+                                ""
+                            ]
+                        },
+                        "description": "Deactivates the old key and generates a new one. Returns the new key."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Active API Key",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api-keys/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api-keys",
+                                ""
+                            ]
+                        },
+                        "description": "Returns the currently active API key information."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Revoke Active Key",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api-keys/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api-keys",
+                                ""
+                            ]
+                        },
+                        "description": "Revokes (deactivates) the currently active API key."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Scraper",
+            "item": [
+                {
+                    "name": "Trigger Sync",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/scraper/sync",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "scraper",
+                                "sync"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Downloads",
+            "item": [
+                {
+                    "name": "List Files",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-API-Key",
+                                "value": "{{api_secret}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/downloads/list",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "downloads",
+                                "list"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000/api/v1"
+        },
+        {
+            "key": "jwt_token",
+            "value": ""
+        },
+        {
+            "key": "api_secret",
+            "value": ""
+        }
+    ]
+}
