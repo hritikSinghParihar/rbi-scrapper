@@ -31,15 +31,19 @@ class FileDownloader:
         if os.path.exists(token_file):
             creds = Credentials.from_authorized_user_file(token_file, settings.SCOPES)
             
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(settings.GOOGLE_APPLICATION_CREDENTIALS, settings.SCOPES)
-                creds = flow.run_local_server(port=0)
-            
-            with open(token_file, 'w') as token:
-                token.write(creds.to_json())
+        try:
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file(settings.GOOGLE_APPLICATION_CREDENTIALS, settings.SCOPES)
+                    creds = flow.run_local_server(port=0)
+                
+                with open(token_file, 'w') as token:
+                    token.write(creds.to_json())
+        except Exception as e:
+            logger.error(f"Google Drive authentication failed: {e}")
+            return None
         
         try:
             return build('drive', 'v3', credentials=creds)

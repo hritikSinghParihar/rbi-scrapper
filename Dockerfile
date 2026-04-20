@@ -1,16 +1,13 @@
-FROM python:3.11-slim
+FROM python:3.11-bookworm
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements and install
+# Install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
+
+# Install test dependencies (optional)
+RUN pip install --no-cache-dir pytest
 
 # Copy application code
 COPY . .
