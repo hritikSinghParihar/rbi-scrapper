@@ -4,10 +4,13 @@ WORKDIR /app
 
 # Install dependencies
 COPY requirements.txt .
-RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
-# Install test dependencies (optional)
-RUN pip install --no-cache-dir pytest
+# Increase timeout, use a mirror, and increase retries for unstable connections
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --default-timeout=1000 \
+                --retries 10 \
+                --no-cache-dir \
+                -r requirements.txt
 
 # Copy application code
 COPY . .
